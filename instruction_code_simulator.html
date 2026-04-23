@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Instruction Code Simulator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Courier New', monospace;
+    background: #0d1117;
+    color: #e6edf3;
+    min-height: 100vh;
+    padding: 40px 32px;
+  }
+
+  h1 {
+    font-size: 13px;
+    color: #8b949e;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  /* ── Bit strip ── */
+  .bit-strip { display: flex; gap: 6px; margin-bottom: 8px; }
+  .bit {
+    width: 48px; height: 52px;
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    font-size: 20px; font-weight: bold;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .1s, border-color .1s, color .1s;
+    user-select: none; color: #444d56;
+  }
+  .bit:hover { border-color: #58a6ff; color: #58a6ff; }
+  .bit.op  { background: #1c2f45; border-color: #58a6ff; color: #58a6ff; }
+  .bit.addr { background: #162a1e; border-color: #3fb950; color: #3fb950; }
+
+  .bit-labels { display: flex; gap: 6px; margin-bottom: 28px; }
+  .bit-lbl { width: 48px; text-align: center; font-size: 10px; color: #444d56; }
+
+  /* divider between opcode and operand */
+  .divider { width: 1px; background: #30363d; margin: 0 4px; align-self: stretch; }
+
+  /* ── Decode panel ── */
+  .decode {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-bottom: 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 40px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field-label { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .08em; }
+  .field-value { font-size: 22px; font-weight: bold; letter-spacing: .08em; }
+  .fv-op    { color: #58a6ff; }
+  .fv-addr  { color: #3fb950; }
+  .fv-name  { color: #e6edf3; font-size: 26px; }
+  .fv-type  { font-size: 14px; }
+
+  .badge {
+    display: inline-block; padding: 3px 12px;
+    border-radius: 20px; font-size: 12px; font-weight: normal;
+  }
+  .b-mem { background: #1c2f45; color: #58a6ff; }
+  .b-reg { background: #162a1e; color: #3fb950; }
+  .b-io  { background: #2a1a1a; color: #f78166; }
+
+  .structure {
+    grid-column: 1 / -1;
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 12px;
+    color: #8b949e;
+  }
+  .structure span { font-weight: bold; }
+  .s-op   { color: #58a6ff; }
+  .s-addr { color: #3fb950; }
+
+  /* ── Opcode table ── */
+  .section-label {
+    font-size: 10px; color: #8b949e;
+    text-transform: uppercase; letter-spacing: .1em;
+    margin-bottom: 12px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    text-align: left; padding: 6px 14px;
+    border-bottom: 1px solid #30363d;
+    color: #8b949e; font-weight: normal; font-size: 11px;
+  }
+  td { padding: 7px 14px; border-bottom: 1px solid #161b22; }
+  tr:hover td { background: #161b22; }
+  tr.active td { background: #1c2f45; }
+  .td-bin  { color: #58a6ff; letter-spacing: .08em; }
+  .td-name { color: #e6edf3; font-weight: bold; }
+  .td-type { color: #8b949e; font-size: 11px; }
+
+  .type-cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .type-card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .type-card p { font-size: 12px; color: #8b949e; line-height: 1.7; font-family: sans-serif; }
+  .type-card p strong { color: #e6edf3; }
+  .type-card-title { font-size: 12px; font-weight: bold; letter-spacing: .04em; }
+  .b-mem-title { color: #58a6ff; }
+  .b-reg-title { color: #3fb950; }
+  .b-io-title  { color: #f78166; }
+  .type-card-struct { background: #0d1117; border: 1px solid #21262d; border-radius: 5px; padding: 7px 12px; font-size: 11px; }
+  .type-card-examples { font-size: 11px; color: #444d56; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+
+<h1>Instruction Code Simulator</h1>
+
+<!-- Bit strip -->
+<div class="bit-strip" id="bits"></div>
+<div class="bit-labels" id="labels"></div>
+
+<!-- Decode -->
+<div class="decode">
+  <div class="field">
+    <span class="field-label">Opcode (4 bits)</span>
+    <span class="field-value fv-op" id="d-op">0000</span>
+  </div>
+  <div class="field">
+    <span class="field-label">Operand (8 bits)</span>
+    <span class="field-value fv-addr" id="d-addr">0000 0000</span>
+  </div>
+  <div class="field">
+    <span class="field-label">Operation</span>
+    <span class="field-value fv-name" id="d-name">NOP</span>
+  </div>
+  <div class="field">
+    <span class="field-label">Type</span>
+    <span class="field-value fv-type" id="d-type"><span class="badge b-reg">Register-reference</span></span>
+  </div>
+  <div class="structure" id="d-struct">
+    Structure: &nbsp;<span class="s-op">Opcode</span> &nbsp;+&nbsp; <span class="s-addr">Register control bits</span>
+  </div>
+</div>
+
+<!-- Opcode reference -->
+<div class="section-label">Opcode Reference</div>
+<table>
+  <thead><tr><th>Binary</th><th>Operation</th><th>Type</th></tr></thead>
+  <tbody id="tbody"></tbody>
+</table>
+
+<!-- Type definitions -->
+<div class="section-label" style="margin-top:32px">Instruction Types</div>
+<div class="type-cards">
+  <div class="type-card">
+    <div class="type-card-title b-mem-title">Memory-reference</div>
+    <p>Interacts with the Memory Unit. The operand specifies a <strong>memory address</strong> to read from or write to.</p>
+    <div class="type-card-struct"><span class="s-op">Opcode</span> &nbsp;+&nbsp; <span class="s-addr">Memory Address</span></div>
+    <div class="type-card-examples">LOAD &nbsp; STORE &nbsp; ADD &nbsp; SUB &nbsp; JMP</div>
+  </div>
+  <div class="type-card">
+    <div class="type-card-title b-reg-title">Register-reference</div>
+    <p>Operates on data already inside CPU registers. No memory access needed — the operand holds <strong>register control bits</strong>.</p>
+    <div class="type-card-struct"><span class="s-op">Opcode</span> &nbsp;+&nbsp; <span class="s-addr">Register control bits</span></div>
+    <div class="type-card-examples">AND &nbsp; OR &nbsp; NOT &nbsp; HALT &nbsp; NOP</div>
+  </div>
+  <div class="type-card">
+    <div class="type-card-title b-io-title">I/O instruction</div>
+    <p>Controls communication with external devices like keyboards and displays. The operand holds <strong>I/O control bits</strong>.</p>
+    <div class="type-card-struct"><span class="s-op">Opcode</span> &nbsp;+&nbsp; <span class="s-addr">I/O control bits</span></div>
+    <div class="type-card-examples">IN &nbsp; OUT</div>
+  </div>
+</div>
+
+<script>
+const OPCODES = [
+  ["0000","NOP",  "Register-reference"],
+  ["0001","LOAD", "Memory-reference"],
+  ["0010","STORE","Memory-reference"],
+  ["0011","ADD",  "Memory-reference"],
+  ["0100","SUB",  "Memory-reference"],
+  ["0101","MUL",  "Memory-reference"],
+  ["0110","AND",  "Register-reference"],
+  ["0111","OR",   "Register-reference"],
+  ["1000","NOT",  "Register-reference"],
+  ["1001","JMP",  "Memory-reference"],
+  ["1010","JZ",   "Memory-reference"],
+  ["1011","HALT", "Register-reference"],
+  ["1100","IN",   "I/O instruction"],
+  ["1101","OUT",  "I/O instruction"],
+  ["1110","PUSH", "Memory-reference"],
+  ["1111","POP",  "Memory-reference"],
+];
+
+const BADGE = {
+  "Memory-reference":   '<span class="badge b-mem">Memory-reference</span>',
+  "Register-reference": '<span class="badge b-reg">Register-reference</span>',
+  "I/O instruction":    '<span class="badge b-io">I/O instruction</span>',
+};
+const STRUCT = {
+  "Memory-reference":   `<span class="s-op">Opcode</span> &nbsp;+&nbsp; <span class="s-addr">Memory Address</span>`,
+  "Register-reference": `<span class="s-op">Opcode</span> &nbsp;+&nbsp; <span class="s-addr">Register control bits</span>`,
+  "I/O instruction":    `<span class="s-op">Opcode</span> &nbsp;+&nbsp; <span class="s-addr">I/O control bits</span>`,
+};
+
+// Build table
+const tbody = document.getElementById("tbody");
+OPCODES.forEach(([bin, name, type]) => {
+  const tr = document.createElement("tr");
+  tr.id = "r" + bin;
+  tr.innerHTML = `<td class="td-bin">${bin}</td><td class="td-name">${name}</td><td class="td-type">${type}</td>`;
+  tbody.appendChild(tr);
+});
+
+// Build bits
+const bits = new Array(12).fill(0);
+const btns = [];
+const brow = document.getElementById("bits");
+const lrow = document.getElementById("labels");
+
+for (let i = 0; i < 12; i++) {
+  const b = document.createElement("div");
+  b.className = "bit";
+  b.textContent = "0";
+  b.onclick = () => { bits[i] ^= 1; render(); };
+  brow.appendChild(b);
+  btns.push(b);
+
+  const l = document.createElement("div");
+  l.className = "bit-lbl";
+  l.textContent = i < 4 ? "O" + (i + 1) : "A" + (i - 3);
+  lrow.appendChild(l);
+}
+
+function render() {
+  const op   = bits.slice(0, 4).join("");
+  const addr = bits.slice(4).join("");
+  const row  = OPCODES.find(r => r[0] === op) || [op, "???", "Unknown"];
+  const [, name, type] = row;
+
+  btns.forEach((b, i) => {
+    const on = bits[i];
+    b.textContent = on;
+    b.className = "bit" + (on ? (i < 4 ? " op" : " addr") : "");
+  });
+
+  document.getElementById("d-op").textContent   = op;
+  document.getElementById("d-addr").textContent = addr.slice(0,4) + " " + addr.slice(4);
+  document.getElementById("d-name").textContent = name;
+  document.getElementById("d-type").innerHTML   = BADGE[type] || type;
+  document.getElementById("d-struct").innerHTML = "Structure: &nbsp;" + (STRUCT[type] || type);
+
+  document.querySelectorAll("tbody tr").forEach(r => r.classList.remove("active"));
+  const active = document.getElementById("r" + op);
+  if (active) { active.classList.add("active"); active.scrollIntoView({ block: "nearest" }); }
+}
+</script>
+</body>
+</html>
